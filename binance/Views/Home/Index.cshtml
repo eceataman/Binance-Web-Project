@@ -1,0 +1,197 @@
+﻿@model List<bncData>
+@{ ViewBag.Title = "Index"; }
+
+<html>
+<head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BNC</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-9OAVD86O/qNQs7iXK5m5oD98fROyiJlSBlLBdxqk3nsWZQ9D8v5I8vGuDkskoy6aB3iYsPug2RJu3xMVETv9g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        .star {
+            visibility: hidden;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+            .star:before {
+                content: "\2606";
+                position: absolute;
+                visibility: visible;
+            }
+
+            .star:checked:before {
+                content: "\2605";
+                position: absolute;
+            }
+    </style>
+</head>
+<body>
+        @* Geri dönme linki oluşturma *@
+    <a href="@Request.UrlReferrer?.ToString()" class="btn btn-secondary">Geri Dön</a>
+    <h2>Binance</h2>
+    <input id="search" type="text" placeholder="Search..">
+
+    @* Geri dönme linki oluşturma *@
+    <!--<a href="@Request.UrlReferrer?.ToString()" class="btn btn-secondary">Geri Dön</a>-->
+
+    @using (Html.BeginForm("Index", "Home", new { showFavorites = true }, FormMethod.Post))
+    {
+
+<button type="submit" class="btn btn-outline-danger">Favorites</button>
+
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">SEMBOL</th>
+                            <th scope="col">FİYAT</th>
+
+                        </tr>
+                    </thead>
+
+
+                    <tbody id="myTable" class="table-group-divider">
+                        <tr>
+
+                            @foreach (var data in Model)
+                            {
+
+        <tr>
+            <td>@data.Id</td>
+
+            <td>
+                <a href="@Url.Action("Graph", "Home", new { symbol = data.Symbol })">@data.Symbol</a>
+            </td>
+            <td id="price_@data.Symbol">Yükleniyor...</td>
+            <td>
+                <input class="star" type="checkbox" title="select" id="@("chk_" + data.Id)" name="selectedProductIds" value="@data.Id" @Html.Raw(data.IsFavorite ? "checked" : "") onclick="selection(@data.Id,'@data.Symbol')" />
+
+            </td>
+        </tr>                }
+
+                        </tbody>
+                    </table>}
+
+
+
+    <script>
+
+        var favoritesId = [];
+
+        function deneme() {
+            debugger;
+            console.log(favoritesId);
+        }
+
+        $(document).ready(function deneme() {
+            debugger;
+
+            favoritesId = localStorage.getItem('favorites');
+
+            if (favoritesId == null)
+                favoritesId = [];
+        });
+
+
+        function selection(id, symbol) {
+            debugger;
+            var checkbox = document.getElementById("chk_" + id);
+            //  alert(id + " nolu id favorilendi.");
+
+            $.ajax(
+                {
+                    type: 'POST',
+                    dataType: 'JSON',
+                    url: '/Home/AddorRemoveFavorites',
+                    data: { id: id, symbol: symbol, isCheck: checkbox.checked },
+                    success:
+                        function (response) {
+                        },
+                    error:
+                        function (response) {
+                            alert("Error: " + response);
+                        }
+                });
+
+            localStorage.setItem('favorites', favoritesId);
+
+        }
+
+        //filtreleme//
+        $(function () {
+            $("#search").on("keyup", function () {
+                var value = $(this).val().toLowerCase();
+                $("#myTable tr").filter(function () {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+        });
+
+
+        function updateBackgroundColorForPriceChange(symbol) {
+            const priceCell = $(`#price_${symbol}`);
+            const currentPrice = parseFloat(priceCell.text());
+            const previousPrice = parseFloat(priceCell.data('previous-price'));
+
+            if (!isNaN(previousPrice) && currentPrice !== previousPrice) {
+                if (currentPrice > previousPrice) {
+                    priceCell.css('background-color', 'lightgreen');
+
+                }
+                else if (currentPrice < previousPrice) {
+                    //    priceCell.css('background-color', 'lightcoral');
+                    //}
+                    // setTimeout(() => {
+                    priceCell.css('background-color', 'red');
+                    //  }, 1000); // Renk değişikliğini bir süre sonra eski haline getir
+                }
+            }
+
+            priceCell.data('previous-price', currentPrice);
+        }
+
+        let socket;
+
+
+        const symbolPrices = {};
+
+        function connectWebSocket() {
+            const socketUrl = 'wss://stream.binance.com:9443/ws/!ticker@arr';
+
+            socket = new WebSocket(socketUrl);
+
+            socket.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+                data.forEach(function (ticker) {
+                    const symbol = ticker.s;
+                    const price = ticker.c;
+
+                    // Güncel fiyatları JavaScript nesnesine kaydedelim
+                    symbolPrices[symbol] = price;
+                    updatePrice(symbol);
+                    updateBackgroundColorForPriceChange(symbol); // Fiyat değişimine göre renk güncellemesi
+                });
+            };
+
+            socket.onerror = function (error) {
+                console.error('WebSocket hatası:', error);
+            };
+        }
+
+        function updatePrice(symbol) {
+
+            $(`#price_${symbol}`).text(symbolPrices[symbol] || 'Yükleniyor...');
+        }
+
+
+        connectWebSocket();
+
+
+
+
+    </script>
+</body>
+</html>
